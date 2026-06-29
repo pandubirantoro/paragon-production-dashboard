@@ -113,6 +113,8 @@ def _get_gspread_client():
         return gspread.service_account(filename=CREDENTIALS_FILE)
     try:
         creds_dict = dict(st.secrets["g_credentials"])
+        if "private_key" in creds_dict:
+            creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
         return gspread.service_account_from_dict(creds_dict)
     except KeyError:
         raise RuntimeError(
