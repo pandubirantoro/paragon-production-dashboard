@@ -114,7 +114,14 @@ def _get_gspread_client():
     try:
         creds_dict = dict(st.secrets["g_credentials"])
         if "private_key" in creds_dict:
-            creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+            pk = creds_dict["private_key"]
+            # 1. Paksa semua literal string "\\n" menjadi karakter newline riil
+            pk = pk.replace("\\n", "\n")
+            # 2. Belah berdasarkan newline, bersihkan spasi liar di ujung tiap baris, lalu gabungkan kembali
+            clean_lines = [line.strip() for line in pk.split("\n") if line.strip()]
+            pk = "\n".join(clean_lines)
+            # 3. Masukkan kembali ke dict
+            creds_dict["private_key"] = pk
         return gspread.service_account_from_dict(creds_dict)
     except KeyError:
         raise RuntimeError(
