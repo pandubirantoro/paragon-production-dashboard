@@ -115,12 +115,21 @@ def _get_gspread_client():
         creds_dict = dict(st.secrets["g_credentials"])
         if "private_key" in creds_dict:
             pk = creds_dict["private_key"]
-            # 1. Paksa semua literal string "\\n" menjadi karakter newline riil
+            # Konversi semua literal "\\n" ke newline riil
             pk = pk.replace("\\n", "\n")
-            # 2. Belah berdasarkan newline, bersihkan spasi liar di ujung tiap baris, lalu gabungkan kembali
-            clean_lines = [line.strip() for line in pk.split("\n") if line.strip()]
-            pk = "\n".join(clean_lines)
-            # 3. Masukkan kembali ke dict
+            # Rekonstruksi PEM dari nol: ekstrak tipe kunci, bersihkan base64,
+            # lalu bangun ulang dengan format 64-char-per-line yang standar
+            m = re.search(r'-----BEGIN\s+([^-]+?)\s*-----', pk)
+            if m:
+                key_type = m.group(1).strip()
+                b64 = re.sub(r'-----[^-]+-----', '', pk)
+                b64 = re.sub(r'\s+', '', b64)
+                lines_64 = [b64[i:i+64] for i in range(0, len(b64), 64)]
+                pk = (
+                    f"-----BEGIN {key_type}-----\n"
+                    + "\n".join(lines_64)
+                    + f"\n-----END {key_type}-----\n"
+                )
             creds_dict["private_key"] = pk
         return gspread.service_account_from_dict(creds_dict)
     except KeyError:
