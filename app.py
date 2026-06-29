@@ -109,13 +109,17 @@ div[data-testid="stNotification"] {
 
 @st.cache_resource
 def _get_gspread_client():
-    if not os.path.exists(CREDENTIALS_FILE):
-        raise FileNotFoundError(
-            f"File 'credentials.json' tidak ditemukan.\n"
-            f"Path yang dicari: {CREDENTIALS_FILE}\n"
-            "Pastikan file kunci Service Account sudah disimpan di folder yang sama dengan app.py."
+    if os.path.exists(CREDENTIALS_FILE):
+        return gspread.service_account(filename=CREDENTIALS_FILE)
+    try:
+        creds_dict = dict(st.secrets["g_credentials"])
+        return gspread.service_account_from_dict(creds_dict)
+    except KeyError:
+        raise RuntimeError(
+            "Google credentials tidak ditemukan.\n"
+            "Lokal: pastikan file 'credentials.json' ada di folder yang sama dengan app.py.\n"
+            "Cloud: tambahkan [g_credentials] di Streamlit Secrets."
         )
-    return gspread.service_account(filename=CREDENTIALS_FILE)
 
 
 @st.cache_data(ttl=600)
@@ -682,11 +686,18 @@ def _read_uploaded_file(uploaded_file) -> str:
     raise ValueError(f"Format file tidak didukung: {uploaded_file.name}")
 
 
+def _get_anthropic_api_key() -> str:
+    key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not key:
+        key = st.secrets.get("ANTHROPIC_API_KEY", "")
+    return key
+
+
 def _extract_mom_with_ai(mom_text: str) -> list[dict]:
     """Kirim teks MoM ke Claude, kembalikan list of dict (satu dict per film)."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    api_key = _get_anthropic_api_key()
     if not api_key:
-        raise ValueError("ANTHROPIC_API_KEY belum di-set di file .env")
+        raise ValueError("ANTHROPIC_API_KEY belum dikonfigurasi di .env maupun Streamlit Secrets")
 
     client = anthropic.Anthropic(api_key=api_key)
     message = client.messages.create(
@@ -818,12 +829,12 @@ def render_ai_center():
         "Tempel atau upload teks MoM rapat — AI akan mengekstrak data dan menyinkronkannya ke Google Sheets.",
     )
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    api_key = _get_anthropic_api_key()
     if not api_key:
         st.warning(
             "**ANTHROPIC_API_KEY belum dikonfigurasi.**  \n"
-            "Tambahkan baris berikut ke file `.env` di folder proyek, lalu restart Streamlit:  \n"
-            "```\nANTHROPIC_API_KEY=sk-ant-...\n```"
+            "Lokal: tambahkan `ANTHROPIC_API_KEY=sk-ant-...` di file `.env`.  \n"
+            "Cloud: tambahkan key tersebut di Streamlit Secrets."
         )
 
     col_input, col_result = st.columns([1, 1], gap="large")
