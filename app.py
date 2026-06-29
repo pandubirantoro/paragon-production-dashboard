@@ -109,28 +109,17 @@ div[data-testid="stNotification"] {
 
 @st.cache_resource
 def _get_gspread_client():
+    import base64
     if os.path.exists(CREDENTIALS_FILE):
         return gspread.service_account(filename=CREDENTIALS_FILE)
     try:
+        # Metode utama: credentials.json di-encode base64, bebas dari masalah TOML/copy-paste
+        if "GOOGLE_CREDENTIALS_B64" in st.secrets:
+            raw = base64.b64decode(st.secrets["GOOGLE_CREDENTIALS_B64"]).decode("utf-8")
+            creds_dict = json.loads(raw)
+            return gspread.service_account_from_dict(creds_dict)
+        # Fallback: format lama g_credentials (tidak disarankan)
         creds_dict = dict(st.secrets["g_credentials"])
-        if "private_key" in creds_dict:
-            pk = creds_dict["private_key"]
-            # Konversi semua literal "\\n" ke newline riil
-            pk = pk.replace("\\n", "\n")
-            # Rekonstruksi PEM dari nol: ekstrak tipe kunci, bersihkan base64,
-            # lalu bangun ulang dengan format 64-char-per-line yang standar
-            m = re.search(r'-----BEGIN\s+([^-]+?)\s*-----', pk)
-            if m:
-                key_type = m.group(1).strip()
-                b64 = re.sub(r'-----[^-]+-----', '', pk)
-                b64 = re.sub(r'\s+', '', b64)
-                lines_64 = [b64[i:i+64] for i in range(0, len(b64), 64)]
-                pk = (
-                    f"-----BEGIN {key_type}-----\n"
-                    + "\n".join(lines_64)
-                    + f"\n-----END {key_type}-----\n"
-                )
-            creds_dict["private_key"] = pk
         return gspread.service_account_from_dict(creds_dict)
     except KeyError:
         raise RuntimeError(
